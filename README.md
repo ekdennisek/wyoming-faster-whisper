@@ -1,40 +1,64 @@
-# Wyoming Faster Whisper
+# Wyoming Faster Whisper on ROCm Compatible Devices
 
-[Wyoming protocol](https://github.com/rhasspy/wyoming) server for the [faster-whisper](https://github.com/guillaumekln/faster-whisper/) speech to text system.
+A fork from the [original repo](https://github.com/rhasspy/wyoming-faster-whisper) that adds support for inference on ROCm compatible devices.
 
-## Home Assistant Add-on
+Tested using docker on a Radeon RX 9060 XT.
 
-[![Show add-on](https://my.home-assistant.io/badges/supervisor_addon.svg)](https://my.home-assistant.io/redirect/supervisor_addon/?addon=core_whisper)
+## Building
 
-[Source](https://github.com/home-assistant/addons/tree/master/whisper)
-
-## Local Install
-
-Clone the repository and set up Python virtual environment:
-
-``` sh
-git clone https://github.com/rhasspy/wyoming-faster-whisper.git
-cd wyoming-faster-whisper
-script/setup
-```
-
-Run a server anyone can connect to:
+Clone the repo and build the docker image.
 
 ```sh
-script/run --model tiny-int8 --language en --uri 'tcp://0.0.0.0:10300' --data-dir /data --download-dir /data
+git clone git@github.com:ekdennisek/wyoming-faster-whisper.git .
+cd wyoming-faster-whisper
+docker build -t my-tag-name .
 ```
 
-The `--model` can also be a HuggingFace model like `Systran/faster-distil-whisper-small.en`
+## Running
 
-**NOTE**: Models are downloaded to the first `--data-dir` directory.
+### Run directly using docker
 
-## Docker Image
-
-``` sh
-docker run -it -p 10300:10300 -v /path/to/local/data:/data rhasspy/wyoming-whisper \
-    --model tiny-int8 --language en
+```sh
+docker run --rm -it \
+  --device=/dev/kfd --device=/dev/dri \
+  --group-add video \
+  --security-opt seccomp=unconfined \
+  --ipc=host \
+  -p 10300:10300 \
+  -v "$PWD/whisper-data:/data" \
+  my-tag-name \
+  --device cuda \
+  --compute-type float16 \
+  --model KBLab/kb-whisper-medium \
+  --language sv
 ```
 
-**NOTE**: Models are downloaded to `/data`, so make sure this points to a Docker volume.
+### Run using docker compose
 
-[Source](https://github.com/rhasspy/wyoming-addons/tree/master/whisper)
+```sh
+services:
+  whisper:
+    image: my-tag-name
+    build: .
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    group_add:
+      - video
+    security_opt:
+      - seccomp=unconfined
+    ipc: host
+    ports:
+      - "10300:10300"
+    volumes:
+      - ./whisper-data:/data
+    command:
+      - --device
+      - cuda
+      - --compute-type
+      - float16
+      - --model
+      - KBLab/kb-whisper-medium
+      - --language
+      - sv
+```
